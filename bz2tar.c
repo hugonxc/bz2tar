@@ -12,7 +12,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-// Files
+// Using on file system
 #include <dirent.h>
 #include <ftw.h>
 
@@ -21,10 +21,8 @@ static int one (const struct dirent *unused){
     return 1;
 }
 
-
 // Global scope
 char folder_name[FILENAME_MAX];
-
 
 // Funcs
 int create_dest_folder(char *dest_name){
@@ -44,38 +42,55 @@ int create_dest_folder(char *dest_name){
 }
 
 
-int nftw_copy_func(const char *in_path, const struct stat *stat, int tflags, struct FTW *ftwbuf){
-    if(tflags == FTW_D){
-        printf("%s\n", in_path);
-        char out_path[FILENAME_MAX];
-        strcpy(out_path, folder_name);
-        strcat(out_path, "/");
-        strcat(out_path, in_path);
-        mkdir(out_path, 0777); 
+int nftw_copy_func(const char *fpath, const struct stat *stat, int tflags, struct FTW *ftwbuf){
+    char in_path[FILENAME_MAX], parent_path[FILENAME_MAX];
+    strcpy(in_path, fpath);
+    strcpy(parent_path, fpath);
 
-    }
+    const char delim[2] = "/";
+    char *rest;
+    rest = strtok(parent_path, delim);    
+    int p_strlen = strlen(parent_path)+1;
 
-    if(tflags == FTW_F){
-        printf("%s\n", in_path);
-        char out_path[FILENAME_MAX];
-        strcpy(out_path, folder_name);
-        strcat(out_path, "/");
-        strcat(out_path, in_path);
-        
-        char buff[BUFSIZ];
-        FILE    *in, *out;
-        size_t  n;
+    memmove(in_path, in_path+p_strlen, strlen(in_path));
 
-        in  = fopen(in_path, "rb");
-        out = fopen(out_path, "wb");
-        while ( (n=fread(buff,1,BUFSIZ,in)) != 0 ) {
-            fwrite( buff, 1, n, out );
+    if(strlen(in_path) > 0){
+
+        if(tflags == FTW_D){
+            char out_path[FILENAME_MAX];
+            strcpy(out_path, folder_name);
+            strcat(out_path, "/");
+            strcat(out_path, in_path);
+            mkdir(out_path, 0777); 
+
         }
 
-        fclose(in);
-        fclose(out);
+        if(tflags == FTW_F){
+            char out_path[FILENAME_MAX];
+            strcpy(out_path, folder_name);
+            strcat(out_path, "/");
+            strcat(out_path, in_path);
+            
+            char buff[BUFSIZ];
+            FILE *in, *out;
+            size_t  n;
+
+            in  = fopen(fpath, "rb");
+            out = fopen(out_path, "wb");
+
+            while ( (n=fread(buff,1,BUFSIZ,in)) != 0 ) {
+                fwrite( buff, 1, n, out );
+            }
+
+            fclose(in);
+            fclose(out);
+
+        }
 
     }
+
+
+
     return 0;
 }
 
