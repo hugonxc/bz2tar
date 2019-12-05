@@ -1,5 +1,5 @@
 // Defines
-#define FILENAME_MAX 1000
+#define FILENAME_MAX 100000
 #define _XOPEN_SOURCE 500
 #define MAX_AMOUNT 200010
 #define NUMTHREAD 4      /* number of threads */
@@ -11,6 +11,10 @@
 #include <string.h>
 #include <errno.h>
 #include <pthread.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
 
 // Using on mkdir
 #include <sys/stat.h>
@@ -41,6 +45,7 @@ struct FilePath buffer[BUFLEN];
 int buffer_index = 0;
 int aux = 0;
 int aux_ = 0;
+int a = 0, b=0;
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t can_consume  = PTHREAD_COND_INITIALIZER;
@@ -87,7 +92,8 @@ int nftw_dirs_func(const char *fpath, const struct stat *stat, int tflags, struc
             strcpy(file_paths[count_path].in_filename,fpath);
             strcpy(file_paths[count_path].out_filename, out_path);
             file_paths[count_path].type = 1;
-            count_path++;
+            ++count_path;
+
 
         }
 
@@ -100,7 +106,7 @@ int nftw_dirs_func(const char *fpath, const struct stat *stat, int tflags, struc
             strcpy(file_paths[count_path].in_filename,fpath);
             strcpy(file_paths[count_path].out_filename, out_path);
             file_paths[count_path].type = 0;
-            count_path++;
+            ++count_path;
         }
 
     }
@@ -196,38 +202,39 @@ void* producer(void *arg) {
 
 
 void* consumer(void *arg) {
-    while(1){
+    struct FilePath buffer_aux;
+    
+    while(buffer_index >= 0){
         pthread_mutex_lock(&mutex);
         aux_++;
-        if(aux_ >= count_path) { // empty and produced all
+        if(aux_ > count_path) { // produced all
             pthread_mutex_unlock(&mutex);
             break;
         }
 
-        while(buffer_index == 0) { // full
-            // wait until some elements are consumed
-            pthread_cond_wait(&can_consume, &mutex);
-        }
 
+        while(buffer_index == 0) { // empty
+            // wait until some elements are consumed
+             pthread_cond_wait(&can_consume, &mutex);
+        }
 
         pthread_mutex_unlock(&mutex);
 
-
         --buffer_index;
-        struct FilePath buffer_aux = buffer[buffer_index];
+
+        buffer_aux = buffer[buffer_index];
+    
         if(buffer_aux.type == 0){
             char cmd[FILENAME_MAX] = "bzip2 ";
             strcat(cmd, buffer_aux.out_filename);
+            
             FILE *fp = popen(cmd, "w");
             pclose(fp);
         }
 
 
-
         pthread_cond_signal(&can_produce);
-    }
-
-
+     }
 
     // never reached
     return NULL;
@@ -246,7 +253,7 @@ int main(int argc, char *argv[]){
     // Create folder .bz2
     create_dest_folder(dest_name);
     fill_list_of_files(orig_dir);
-    
+
     pthread_create(&prod, NULL, producer, (void*)&thread_id[0]);
     pthread_create(&cons1, NULL, consumer, (void*)&thread_id[1]);
     pthread_create(&cons2, NULL, consumer, (void*)&thread_id[2]);
